@@ -1,0 +1,367 @@
+<!doctype html>
+<html lang="th" class="h-full">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>{% block title %}School{% endblock %}</title>
+
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: { primary: { DEFAULT: '#2563eb' } },
+          boxShadow: { soft: '0 10px 30px -10px rgba(2,6,23,.15)' },
+        }
+      }
+    }
+  </script>
+
+  <style type="text/tailwindcss">
+    @layer base {
+      input, select, textarea {
+        @apply w-full rounded-xl border border-gray-300/80 bg-white/90 px-3.5 py-2.5 shadow-sm outline-none transition
+               focus:border-primary focus:ring-4 ring-primary/20;
+      }
+      a.link { @apply text-primary hover:underline; }
+      .card { @apply bg-white/90 backdrop-blur rounded-2xl shadow-soft border border-gray-200; }
+      .muted { @apply text-gray-500; }
+    }
+    @layer components {
+      .btn-primary {@apply inline-flex items-center justify-center rounded-xl px-4 py-2.5
+                    bg-primary text-white hover:bg-primary/90 shadow-soft;}
+      .btn-ghost   {@apply rounded-xl px-3 py-2 text-slate-700 hover:bg-slate-100;}
+      .btn-outline-red{@apply rounded-xl px-3 py-2 border border-red-600 text-red-600 hover:bg-red-50;}
+
+      .chip        {@apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;}
+      .chip--ok    {@apply bg-emerald-100 text-emerald-700;}
+      .chip--warn  {@apply bg-amber-100 text-amber-700;}
+      .chip--late  {@apply bg-rose-100 text-rose-700;}
+
+      .stat-card   {@apply card p-5 flex items-center gap-3;}
+      .skeleton    {@apply animate-pulse bg-slate-200/70 rounded-md;}
+    }
+  </style>
+
+  {% block extra_head %}{% endblock %}
+</head>
+
+<body class="min-h-full bg-gradient-to-br from-slate-50 via-white to-indigo-50 text-slate-900">
+
+  {% block header %}
+  <header class="sticky top-0 z-30 bg-white/70 backdrop-blur border-b border-slate-200/80">
+    <div class="w-full px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
+      <div class="flex items-center gap-4">
+        <a href="{% url 'role_redirect' %}" class="font-extrabold text-2xl sm:text-3xl tracking-tight text-slate-800">
+          Klassroom
+        </a>
+
+        {% if request.user.is_authenticated %}
+          <form class="block" onsubmit="return false">
+            <select class="min-w-[12rem] sm:min-w-[14rem]" aria-label="เลือกวิชา"
+                    onchange="if(this.value){ location.href=this.value }">
+              {% if teacher_courses %}
+                {% for c in teacher_courses %}
+                  <option value="{% url 'courses:assignment_list' c.id %}"
+                          {% if course and c.id == course.id %}selected{% endif %}>
+                    {{ c.courseName }} ({{ c.courseID }})
+                  </option>
+                {% endfor %}
+              {% elif enrollments %}
+                {% for en in enrollments %}
+                  <option value="{% url 'courses:assignment_list' en.course.id %}"
+                          {% if course and en.course.id == course.id %}selected{% endif %}>
+                    {{ en.course.courseName }} ({{ en.course.courseID }})
+                  </option>
+                {% endfor %}
+              {% endif %}
+            </select>
+          </form>
+        {% endif %}
+      </div>
+
+      <div class="flex items-center gap-4 sm:gap-6">
+        {% if request.user.is_authenticated %}
+        <!-- 🔔 Notification Bell -->
+        <div id="notification-wrapper" class="relative">
+          <button id="notification-btn" type="button" class="relative text-2xl outline-none"
+                  aria-haspopup="true" aria-expanded="false" aria-controls="notif-dropdown">
+            🔔
+            <span id="notif-badge"
+                  class="absolute -top-1 -right-1 bg-red-500 text-white text-xs min-w-[1.25rem] text-center px-0.5 rounded-full hidden">0</span>
+          </button>
+          <!-- Dropdown -->
+          <div id="notif-dropdown"
+               class="absolute right-0 mt-2 w-80 max-w-[92vw] bg-white rounded-lg shadow-lg border border-slate-200/80 hidden z-[2147483600]">
+            <div class="p-3 font-semibold border-b flex items-center justify-between">
+              <span>การแจ้งเตือน</span>
+              <button type="button" id="notif-mark-all" class="text-xs text-slate-500 hover:text-slate-700">ทำเป็นอ่านแล้ว</button>
+            </div>
+            <ul id="notif-list" class="max-h-64 overflow-y-auto text-sm divide-y"></ul>
+          </div>
+        </div>
+
+        <form action="{% url 'logout' %}" method="post" class="hidden sm:block">
+          {% csrf_token %}
+          <button type="submit" class="btn-outline-red">ออกจากระบบ</button>
+        </form>
+        <a href="{% url 'logout' %}" class="sm:hidden text-sm link">ออกจากระบบ</a>
+        {% else %}
+        <a class="link text-sm" href="{% url 'login' %}">เข้าสู่ระบบ</a>
+        {% endif %}
+      </div>
+    </div>
+  </header>
+  {% endblock %}
+
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex gap-6">
+
+    {% if request.user.is_authenticated and not hide_sidebar %}
+      <aside class="hidden lg:block sticky top-24 self-start w-80 pr-2 space-y-6 max-h-[calc(100vh-7rem)] overflow-y-auto">
+
+        <div class="card p-6 text-center space-y-4">
+          <div class="w-24 h-24 mx-auto rounded-full overflow-hidden border shadow">
+            {% if request.user.role == 'STUDENT' and request.user.student and request.user.student.pic %}
+              <img src="{{ request.user.student.pic.url }}" class="w-full h-full object-cover" alt="avatar">
+            {% elif request.user.role == 'TEACHER' and request.user.teacher and request.user.teacher.pic %}
+              <img src="{{ request.user.teacher.pic.url }}" class="w-full h-full object-cover" alt="avatar">
+            {% else %}
+              <div class="w-full h-full flex items-center justify-center bg-indigo-600 text-white text-2xl font-bold">
+                {{ request.user.fname|first|default:"U" }}
+              </div>
+            {% endif %}
+          </div>
+
+          <p class="font-semibold">{{ request.user.fname }} {{ request.user.lname }}</p>
+          <p class="text-sm text-slate-500">
+            {% if request.user.role == 'TEACHER' %}คุณครู{% elif request.user.role == 'STUDENT' %}นักเรียน{% endif %}
+          </p>
+          <a href="{% url 'profile' %}" class="text-sm text-indigo-600 hover:underline">✏️ แก้ไขโปรไฟล์</a>
+        </div>
+
+        {% if request.user.role == 'TEACHER' %}
+          <nav class="card divide-y">
+            {% if course %}
+              <a href="{% url 'courses:course_edit' course.id %}"
+                 class="flex items-center gap-2 px-4 py-3 hover:bg-slate-50
+                        {% if request.resolver_match.url_name == 'course_edit' %}bg-indigo-50 text-indigo-700 font-semibold{% endif %}">
+                🏫 {{ course.courseName }} ({{ course.courseID }})
+              </a>
+              <a href="{% url 'courses:assignment_list' course.id %}"
+                 class="flex items-center gap-2 px-4 py-3 hover:bg-slate-50
+                        {% if request.resolver_match.url_name == 'assignment_list' %}bg-indigo-50 text-indigo-700 font-semibold{% endif %}">
+                📄 งาน
+              </a>
+              <a href="{% url 'courses:grades' course.id %}"
+                 class="flex items-center gap-2 px-4 py-3 hover:bg-slate-50
+                        {% if request.resolver_match.url_name == 'grades' %}bg-indigo-50 text-indigo-700 font-semibold{% endif %}">
+                🏆 คะแนน
+              </a>
+              <a href="{% url 'courses:student_list' course.id %}"
+                 class="flex items-center gap-2 px-4 py-3 hover:bg-slate-50
+                        {% if request.resolver_match.url_name == 'student_list' %}bg-indigo-50 text-indigo-700 font-semibold{% endif %}">
+                👨‍🎓 นักเรียน
+              </a>
+            {% else %}
+              <a href="{% url 'courses:course_add' %}"
+                 class="flex items-center gap-2 px-4 py-3 hover:bg-slate-50
+                        {% if request.resolver_match.url_name == 'course_add' %}bg-indigo-50 text-indigo-700 font-semibold{% endif %}">
+                ➕ เพิ่มรายวิชา
+              </a>
+            {% endif %}
+          </nav>
+        {% endif %}
+      </aside>
+    {% endif %}
+
+    <main class="flex-1">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+
+  <!-- พื้นหลัง -->
+  <div class="pointer-events-none fixed inset-0 -z-10">
+    <div class="absolute -top-28 -right-24 w-[36rem] h-[36rem] rounded-full blur-3xl opacity-20
+                bg-gradient-to-br from-indigo-400 to-sky-300"></div>
+    <div class="absolute -bottom-28 -left-20 w-[28rem] h-[28rem] rounded-full blur-3xl opacity-15
+                bg-gradient-to-tr from-pink-300 to-purple-300"></div>
+  </div>
+
+  <!-- ที่วาง Toast -->
+  <div id="global-toast-stack" class="fixed top-4 right-4 space-y-2 z-[2147483601]"></div>
+
+  {% block extra_js %}
+  <script>
+  // ====== Utilities ======
+  function getCookie(name){
+    const m = document.cookie.match('(^|;)\\s*'+name+'\\s*=\\s*([^;]+)');
+    return m ? m.pop() : '';
+  }
+  function escapeHtml(s){
+    return String(s||'').replace(/[&<>"']/g, m => (
+      {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]
+    ));
+  }
+  function showToast(text){
+    const stack = document.getElementById('global-toast-stack');
+    const el = document.createElement('div');
+    el.className = 'toast-item bg-white border border-slate-200 shadow-xl rounded-xl px-4 py-3 max-w-sm transition';
+    el.innerHTML = `
+      <div class="flex items-start gap-3">
+        <div class="w-8 h-8 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center">🔔</div>
+        <div class="flex-1">
+          <div class="text-sm">${escapeHtml(text)}</div>
+          <div class="text-[11px] text-slate-400 mt-1">ขณะนี้</div>
+        </div>
+        <button class="text-slate-400 hover:text-slate-600" onclick="this.closest('.toast-item')?.remove()">✕</button>
+      </div>`;
+    stack.appendChild(el);
+    setTimeout(()=>{ el.style.opacity='0'; el.style.transform='translateY(-6px)'; setTimeout(()=>el.remove(),300); }, 5000);
+  }
+  </script>
+
+  {# ==== Django messages -> Toast ==== #}
+  {% if messages %}
+    <script id="dj-messages-data" type="application/json">
+      [
+        {% for m in messages %}
+          {"text":"{{ m|escapejs }}","tags":"{{ m.tags }}","level":"{{ m.level_tag }}"}{% if not forloop.last %},{% endif %}
+        {% endfor %}
+      ]
+    </script>
+    <script>
+      (function () {
+        try {
+          const raw = document.getElementById('dj-messages-data')?.textContent || '[]';
+          const items = JSON.parse(raw);
+          const iconMap = {
+            success: '✅', info: 'ℹ️', warning: '⚠️', error: '❌',
+            created: '✅', updated: '📝', deleted: '🗑️'
+          };
+          items.forEach(({ text, tags, level }) => {
+            const key = (String(tags || '').split(' ')[0] || level || '').toLowerCase();
+            const icon = iconMap[key] || '🔔';
+            showToast(`${icon} ${text}`);
+          });
+        } catch {}
+      })();
+    </script>
+  {% endif %}
+
+  <!-- ====== Notifications: dropdown + API + mark-all + WS ====== -->
+  <script>
+  (function notifBoot(){
+    const btn   = document.getElementById('notification-btn');
+    const drop  = document.getElementById('notif-dropdown');
+    const list  = document.getElementById('notif-list');
+    const badge = document.getElementById('notif-badge');
+    const mark  = document.getElementById('notif-mark-all');
+    if (!btn || !drop || !list) return;
+
+    function setUnread(n){
+      if (n>0){ badge.textContent = n; badge.classList.remove('hidden'); }
+      else    { badge.classList.add('hidden'); }
+    }
+
+    function itemHTML(it){
+      const icon  = escapeHtml(it.icon || '🔔');
+      const title = escapeHtml(it.title || it.message || '');
+      const body  = it.body ? `<div class="text-[12px] text-slate-500 mt-0.5">${escapeHtml(it.body)}</div>` : '';
+      const time  = it.created_at ? new Date(it.created_at).toLocaleString('th-TH', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) : '';
+      const read  = it.is_read ? 'opacity-75' : 'font-medium';
+      const link  = it.url ? `<a class="absolute inset-0" href="${it.url}"></a>` : '';
+      return `<li class="relative p-3 hover:bg-slate-50 ${read}">
+        <div class="flex items-start gap-2">
+          <div class="text-lg">${icon}</div>
+          <div class="min-w-0">
+            <div class="text-sm">${title}</div>
+            ${body}
+            <div class="text-[11px] text-slate-400 mt-1">${escapeHtml(time)}</div>
+          </div>
+        </div>
+        ${link}
+      </li>`;
+    }
+
+    async function loadList(){
+      try{
+        const res  = await fetch("{% url 'notifications_list_api' %}", {headers:{'X-Requested-With':'fetch'}});
+        const data = await res.json();
+        const items = data.items || data || [];
+        list.innerHTML = items.length ? items.map(itemHTML).join('')
+                                     : '<li class="p-3 text-sm text-slate-500">ยังไม่มีการแจ้งเตือน</li>';
+        setUnread((data.unread ?? items.filter(i=>!i.is_read).length) || 0);
+      }catch{
+        list.innerHTML = '<li class="p-3 text-sm text-rose-600">โหลดการแจ้งเตือนไม่สำเร็จ</li>';
+      }
+    }
+
+    // Toggle dropdown
+    function outsideToClose(e){
+      if (!drop.contains(e.target) && !btn.contains(e.target)) closeDrop();
+    }
+    function openDrop(){
+      drop.classList.remove('hidden');
+      btn.setAttribute('aria-expanded', 'true');
+      document.addEventListener('click', outsideToClose);
+      loadList();
+    }
+    function closeDrop(){
+      drop.classList.add('hidden');
+      btn.setAttribute('aria-expanded', 'false');
+      document.removeEventListener('click', outsideToClose);
+    }
+    btn.addEventListener('click', (e)=>{ e.preventDefault(); drop.classList.contains('hidden') ? openDrop() : closeDrop(); });
+
+    // Mark all as read
+    mark?.addEventListener('click', async ()=>{
+      try{
+        await fetch("{% url 'notifications_mark_all_api' %}", {
+          method: 'POST',
+          headers: { 'X-CSRFToken': getCookie('csrftoken') }
+        });
+        setUnread(0);
+        loadList();
+      }catch{}
+    });
+
+    // WebSocket realtime (fallback polling)
+    function bootWS(){
+      try{
+        const scheme = (location.protocol === 'https:') ? 'wss' : 'ws';
+        const ws = new WebSocket(`${scheme}://${location.host}/ws/notifications/`);
+        ws.onmessage = (e)=>{
+          try{
+            const msg = JSON.parse(e.data || '{}');
+            if (msg.event === 'init'){
+              const items = msg.items || [];
+              list.innerHTML = items.length ? items.map(itemHTML).join('')
+                                            : '<li class="p-3 text-sm text-slate-500">ยังไม่มีการแจ้งเตือน</li>';
+              setUnread(msg.unread || 0);
+            } else if (msg.event === 'new'){
+              list.insertAdjacentHTML('afterbegin', itemHTML(msg.item));
+              setUnread((Number(badge.textContent || 0) + 1) || 1);
+              showToast(`${(msg.item && msg.item.icon) || '🔔'} ${(msg.item && (msg.item.title||msg.item.message)) || 'มีการแจ้งเตือนใหม่'}`);
+            } else if (msg.event === 'read'){
+              setUnread(msg.unread || 0);
+            }
+          }catch{}
+        };
+        ws.onclose = ()=> setTimeout(bootWS, 5000);
+      }catch{
+        // ถ้า WS ใช้ไม่ได้ ให้ดึงทุก 30 วิ
+        setInterval(loadList, 30000);
+      }
+    }
+
+    // initial
+    loadList();
+    bootWS();
+  })();
+  </script>
+  {% endblock %}
+
+</body>
+</html>

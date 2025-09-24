@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}สมัครสมาชิก ({{ user_type }}){% endblock %}
+
+{% block header %}{% endblock %}
+
+{% block content %}
+<div class="min-h-[80vh] flex items-center justify-center px-4">
+  <div class="card w-full max-w-2xl p-8">
+    <div class="text-center">
+      <h1 class="text-3xl font-extrabold">สมัครสมาชิก ({{ user_type }})</h1>
+      <p class="text-slate-600 mt-2">กรอกข้อมูลให้ครบถ้วนตามตัวอย่างด้านล่าง</p>
+    </div>
+
+    <form method="post" class="mt-6 space-y-4" novalidate>
+      {% csrf_token %}
+
+      {% if form.non_field_errors %}
+      <div class="rounded-lg border border-red-200 bg-red-50 text-red-700 px-3 py-2" role="alert" aria-live="polite">
+        {{ form.non_field_errors }}
+      </div>
+      {% endif %}
+
+      <div>
+        <label for="id_email" class="block text-sm font-medium">อีเมล</label>
+        <input id="id_email" type="email" name="email" autocomplete="email" inputmode="email"
+               class="mt-1"
+               placeholder="name@gmail.com"
+               value="{{ form.email.value|default_if_none:'' }}">
+        {% if form.email.errors %}<p class="text-sm text-red-600 mt-1">{{ form.email.errors.0 }}</p>{% endif %}
+      </div>
+
+      <div class="grid sm:grid-cols-2 gap-4">
+        <div>
+          <label for="id_fname" class="block text-sm font-medium">ชื่อจริง</label>
+          <input id="id_fname" type="text" name="fname" autocomplete="given-name"
+                 class="mt-1"
+                 placeholder="ชื่อจริง"
+                 value="{{ form.fname.value|default_if_none:'' }}">
+          {% if form.fname.errors %}<p class="text-sm text-red-600 mt-1">{{ form.fname.errors.0 }}</p>{% endif %}
+        </div>
+        <div>
+          <label for="id_lname" class="block text-sm font-medium">นามสกุล</label>
+          <input id="id_lname" type="text" name="lname" autocomplete="family-name"
+                 class="mt-1"
+                 placeholder="นามสกุล"
+                 value="{{ form.lname.value|default_if_none:'' }}">
+          {% if form.lname.errors %}<p class="text-sm text-red-600 mt-1">{{ form.lname.errors.0 }}</p>{% endif %}
+        </div>
+      </div>
+
+      <div class="grid sm:grid-cols-2 gap-4">
+        <div>
+          <label for="id_password1" class="block text-sm font-medium">รหัสผ่าน</label>
+          <div class="relative mt-1">
+            <input id="id_password1" type="password" name="password1" autocomplete="new-password"
+                   class="pr-14"
+                   minlength="8" placeholder="อย่างน้อย 8 ตัวอักษร">
+            <button type="button"
+                    class="absolute right-2 top-1/2 -translate-y-1/2 text-sm text-slate-600 hover:text-slate-800"
+                    onclick="togglePw('id_password1', this)">แสดง</button>
+          </div>
+          {% if form.password1.errors %}<p class="text-sm text-red-600 mt-1">{{ form.password1.errors.0 }}</p>{% endif %}
+        </div>
+
+        <div>
+          <label for="id_password2" class="block text-sm font-medium">ยืนยันรหัสผ่าน</label>
+          <div class="relative mt-1">
+            <input id="id_password2" type="password" name="password2" autocomplete="new-password"
+                   class="pr-14" placeholder="พิมพ์รหัสผ่านอีกครั้ง">
+            <button type="button"
+                    class="absolute right-2 top-1/2 -translate-y-1/2 text-sm text-slate-600 hover:text-slate-800"
+                    onclick="togglePw('id_password2', this)">แสดง</button>
+          </div>
+          {% if form.password2.errors %}<p class="text-sm text-red-600 mt-1">{{ form.password2.errors.0 }}</p>{% endif %}
+        </div>
+      </div>
+
+      <button class="btn-primary w-full py-3 mt-2">สมัครสมาชิก</button>
+      <p class="text-center text-sm mt-3">มีบัญชีแล้ว? <a href="{% url 'login' %}" class="link">เข้าสู่ระบบ</a></p>
+    </form>
+  </div>
+</div>
+
+<script>
+  function togglePw(id, el){
+    const i = document.getElementById(id);
+    if(!i) return;
+    i.type = i.type === 'password' ? 'text' : 'password';
+    el.textContent = i.type === 'password' ? 'แสดง' : 'ซ่อน';
+  }
+</script>
+{% endblock %}

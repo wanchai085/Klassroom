@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}เข้าสู่ระบบ{% endblock %}
+
+{# ซ่อน Topbar #}
+{% block header %}{% endblock %}
+
+{% block content %}
+<div class="min-h-[80vh] flex items-center justify-center px-4">
+  <div class="card w-full max-w-md p-8 shadow-soft">
+    <div class="text-center mb-6">
+      <h1 class="text-2xl font-extrabold tracking-tight">เข้าสู่ระบบ</h1>
+      <p class="mt-1 text-sm text-slate-500">ยินดีต้อนรับกลับสู่ Klassroom</p>
+    </div>
+
+    <form method="post" action="{% url 'login' %}" class="space-y-4" novalidate>
+      {% csrf_token %}
+      {% if next %}
+        <input type="hidden" name="next" value="{{ next }}">
+      {% endif %}
+
+      {% if form.non_field_errors %}
+        <div class="rounded-lg border border-red-200 bg-red-50 text-red-700 px-3 py-2 text-sm">
+          {{ form.non_field_errors }}
+        </div>
+      {% endif %}
+
+      <!-- Email -->
+      <div>
+        <label for="id_username" class="block text-sm font-medium">อีเมล</label>
+        <input id="id_username" type="email" name="username" autocomplete="username"
+               inputmode="email" placeholder="name@gmail.com" required
+               class="mt-1">
+        {% if form.username.errors %}
+          <p class="mt-1 text-xs text-rose-600">{{ form.username.errors|join:", " }}</p>
+        {% endif %}
+      </div>
+
+      <!-- Password -->
+      <div>
+        <label for="id_password" class="block text-sm font-medium">รหัสผ่าน</label>
+        <div class="mt-1 relative">
+          <input id="id_password" type="password" name="password" autocomplete="current-password"
+                 placeholder="********" required class="pr-10">
+
+          <!-- ปุ่ม Toggle -->
+          <button type="button" aria-label="แสดง/ซ่อนรหัสผ่าน"
+                  class="absolute inset-y-0 right-2 flex items-center px-2
+                         text-slate-400 hover:text-primary transition"
+                  onclick="togglePwd('id_password', this)">
+            <!-- 👁️ ไอคอนเริ่มต้น -->
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none"
+                 viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7
+                       -1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+            </svg>
+          </button>
+        </div>
+        {% if form.password.errors %}
+          <p class="mt-1 text-xs text-rose-600">{{ form.password.errors|join:", " }}</p>
+        {% endif %}
+      </div>
+
+      <!-- Submit -->
+      <button class="btn-primary w-full py-3 mt-2">เข้าสู่ระบบ</button>
+    </form>
+
+    <!-- Extra links -->
+    <div class="mt-6 grid grid-cols-2 gap-4">
+      <a href="{% url 'password_reset' %}" class="text-center rounded-xl border py-2 hover:bg-slate-50">
+        ลืมรหัสผ่าน
+      </a>
+      <a href="{% url 'register' %}" class="text-center rounded-xl border py-2 hover:bg-slate-50">
+        สมัครสมาชิก
+      </a>
+    </div>
+  </div>
+</div>
+
+<script>
+function togglePwd(id, btn){
+  const el = document.getElementById(id);
+  if (!el) return;
+
+  const isPw = el.type === "password";
+  el.type = isPw ? "text" : "password";
+
+  // เปลี่ยนไอคอน (👁️ ↔️ eye-slash)
+  btn.innerHTML = isPw
+    ? `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none"
+             viewBox="0 0 24 24" stroke="currentColor">
+         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+               d="M13.875 18.825A10.05 10.05 0 0112 19c-4.477 0-8.268-2.943-9.542-7
+                  a9.96 9.96 0 012.642-4.362M6.223 6.223A9.96 9.96 0 0112 5
+                  c4.477 0 8.268 2.943 9.542 7a9.953 9.953 0 01-4.132 5.411M15 12a3 3 0 11-6 0
+                  3 3 0 016 0z"/>
+         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+               d="M3 3l18 18"/>
+       </svg>`
+    : `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none"
+             viewBox="0 0 24 24" stroke="currentColor">
+         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+               d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+               d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7
+                  -1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+       </svg>`;
+}
+</script>
+{% endblock %}

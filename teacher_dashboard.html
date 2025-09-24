@@ -1,0 +1,465 @@
+{% extends "base.html" %}
+{% block title %}แดชบอร์ดครู{% endblock %}
+
+{% block content %}
+<h1 class="text-3xl font-bold mb-6">👋 สวัสดีคุณครู {{ request.user.fname|default:"" }}</h1>
+
+<!-- การ์ดสถิติ -->
+<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
+  {% for s in stats %}
+    <a href="{{ s.href|default:'#' }}" class="block card rounded-2xl p-5 hover:shadow-md transition">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-lg">{{ s.icon }}</div>
+        <div>
+          <p class="text-sm text-slate-500">{{ s.title }}</p>
+          <p class="text-xl font-semibold">{{ s.value }}</p>
+          {% if s.cta %}<p class="mt-1 text-xs text-indigo-600">{{ s.cta }}</p>{% endif %}
+        </div>
+      </div>
+    </a>
+  {% endfor %}
+</div>
+
+<!-- นักเรียนที่ต้องจับตามอง -->
+<div class="bg-white rounded-2xl shadow p-5 mb-10" data-widget="watchlist">
+  <div class="flex items-center justify-between mb-4">
+    <h3 class="text-lg font-semibold">👀 นักเรียนที่ต้องจับตามอง</h3>
+    <div class="hidden md:flex items-center gap-2 text-xs text-slate-500">
+      <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">≥ 70% ดี</span>
+      <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">50–69% ปานกลาง</span>
+      <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-rose-100 text-rose-700">&lt; 50% ต่ำ</span>
+    </div>
+  </div>
+
+  <div class="space-y-3" id="watchlist">
+    {% if watchlist and watchlist|length > 0 %}
+      {% for s in watchlist %}
+      <div class="border rounded-xl p-3 hover:bg-slate-50 transition">
+        <div class="flex items-center justify-between gap-4">
+          <div class="min-w-0">
+            <div class="font-medium truncate">{{ s.name }}</div>
+            <div class="mt-1 flex flex-wrap items-center gap-2 text-xs">
+              {% if s.missing > 0 %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-rose-100 text-rose-700">⏰ พลาดส่ง {{ s.missing }}</span>
+              {% else %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">⏰ พลาดส่ง 0</span>
+              {% endif %}
+              {% if s.low_streak > 0 %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">📉 ต่ำติดกัน {{ s.low_streak }}</span>
+              {% else %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">📉 ต่ำติดกัน 0</span>
+              {% endif %}
+            </div>
+          </div>
+
+          <div class="w-44">
+            {% if s.avg_pct is not None %}
+              <div class="text-right text-xs text-slate-500 -mb-1">เฉลี่ย</div>
+              <div class="flex items-center gap-3">
+                <div class="flex-1 h-2 rounded-full bg-slate-200 overflow-hidden">
+                  {% if s.avg_pct >= 70 %}
+                    <div class="h-2 bg-emerald-500" style="width: {{ s.avg_pct }}%"></div>
+                  {% elif s.avg_pct >= 50 %}
+                    <div class="h-2 bg-amber-500" style="width: {{ s.avg_pct }}%"></div>
+                  {% else %}
+                    <div class="h-2 bg-rose-500" style="width: {{ s.avg_pct }}%"></div>
+                  {% endif %}
+                </div>
+                {% if s.avg_pct >= 70 %}
+                  <div class="w-14 text-right font-semibold text-emerald-600">{{ s.avg_pct|floatformat:0 }}%</div>
+                {% elif s.avg_pct >= 50 %}
+                  <div class="w-14 text-right font-semibold text-amber-600">{{ s.avg_pct|floatformat:0 }}%</div>
+                {% else %}
+                  <div class="w-14 text-right font-semibold text-rose-600">{{ s.avg_pct|floatformat:0 }}%</div>
+                {% endif %}
+              </div>
+            {% else %}
+              <div class="text-right text-xs text-slate-400">ยังไม่มีคะแนน</div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <p class="text-slate-500">ยังไม่พบนักเรียนที่เข้าเกณฑ์ความเสี่ยง</p>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Analytics รวม -->
+<div class="card p-6 mb-8">
+  <h2 class="font-semibold mb-4">📊 อัตราการส่งงานที่ยังไม่ครบ + 🏆 สถิติรวมของห้อง</h2>
+
+  {% if submission_data %}
+    <div id="chart-skeleton" class="h-64 skeleton rounded-xl mb-6"></div>
+    <canvas id="submissionChart" class="w-full h-64 mb-6 hidden"></canvas>
+
+    <div id="missingBox" class="mt-4 hidden">
+      <div class="rounded-xl border p-4 bg-white/70">
+        <div class="flex items-center justify-between">
+          <h3 id="missingTitle" class="font-semibold">ยังไม่ส่งงาน</h3>
+          <button type="button" onclick="document.getElementById('missingBox').classList.add('hidden')" class="text-slate-500 hover:text-slate-700">✕</button>
+        </div>
+        <ul id="missingList" class="mt-3 list-disc pl-6 text-sm"></ul>
+      </div>
+    </div>
+  {% else %}
+    <p class="text-center text-gray-500 mb-6">✅ ไม่มีงานค้าง หรือเลยกำหนดแล้ว</p>
+  {% endif %}
+
+  <div class="grid grid-cols-3 gap-4 text-center">
+    <div class="rounded-xl bg-indigo-50 py-4">
+      <p class="text-xs text-slate-500">เฉลี่ย</p>
+      {% with avg_val=class_stats.avg_pct|default_if_none:class_stats.avg %}
+        <p id="stat-avg" class="text-2xl font-bold text-indigo-600">
+          {% if avg_val or avg_val == 0 %}{{ avg_val|floatformat:2 }}%{% else %}—{% endif %}
+        </p>
+      {% endwith %}
+    </div>
+    <div class="rounded-xl bg-emerald-50 py-4">
+      <p class="text-xs text-slate-500">สูงสุด</p>
+      {% with max_val=class_stats.max_pct|default_if_none:class_stats.max %}
+        <p id="stat-max" class="text-2xl font-bold text-emerald-600">
+          {% if max_val or max_val == 0 %}{{ max_val|floatformat:2 }}%{% else %}—{% endif %}
+        </p>
+      {% endwith %}
+    </div>
+    <div class="rounded-xl bg-rose-50 py-4">
+      <p class="text-xs text-slate-500">ต่ำสุด</p>
+      {% with min_val=class_stats.min_pct|default_if_none:class_stats.min %}
+        <p id="stat-min" class="text-2xl font-bold text-rose-600">
+          {% if min_val or min_val == 0 %}{{ min_val|floatformat:2 }}%{% else %}—{% endif %}
+        </p>
+      {% endwith %}
+    </div>
+  </div>
+</div>
+
+<!-- Floating Chat -->
+<div id="chatbot-window"
+     class="fixed bottom-16 right-4 w-96 h-[520px] bg-[#242526] text-white rounded-xl shadow-2xl flex flex-col hidden"
+     style="z-index:2147483000;">
+  <div class="flex items-center justify-between px-3 py-2 bg-[#3a3b3c] rounded-t-xl">
+    <div class="flex items-center gap-2">
+      <div class="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center">🤖</div>
+      <p class="font-semibold">บอทในวิชา</p>
+    </div>
+    <button type="button" onclick="window.toggleChat && window.toggleChat()" class="hover:text-red-400 text-lg">✖</button>
+  </div>
+  <div id="chat-internal" class="flex-1 p-3 space-y-4 overflow-y-auto bg-[#18191a] text-sm leading-relaxed"></div>
+  <div class="flex gap-2 p-2 border-t border-gray-700 bg-[#2a2b2c]">
+    <button type="button" onclick="quickAsk('รายชื่อนักเรียน')" class="px-3 py-1 rounded-full bg-indigo-600 text-white text-xs">รายชื่อนักเรียน</button>
+    <button type="button" onclick="quickAsk('ใครยังไม่ส่งงาน')" class="px-3 py-1 rounded-full bg-indigo-600 text-white text-xs">ใครยังไม่ส่งงาน</button>
+    <button type="button" onclick="quickAsk('คะแนนเฉลี่ย')" class="px-3 py-1 rounded-full bg-indigo-600 text-white text-xs">คะแนนเฉลี่ย</button>
+  </div>
+  <form id="form-internal" class="flex items-center gap-2 p-3 bg-[#3a3b3c] rounded-b-xl">
+    <input id="input-internal" type="text" placeholder="พิมพ์ข้อความ..."
+           class="flex-1 rounded-full px-4 py-2 bg-[#4e4f50] text-white placeholder-gray-300 outline-none">
+    <button type="submit" class="px-4 py-2 rounded-full bg-indigo-600 text-white hover:bg-indigo-700">➤</button>
+  </form>
+</div>
+<button id="chat-toggle-btn" type="button"
+        class="fixed bottom-4 right-4 rounded-full w-14 h-14 shadow-lg flex items-center justify-center text-2xl text-white"
+        style="z-index:2147483001;background:linear-gradient(180deg,#7c8cfb,#5a6bf0)">
+  💬
+</button>
+
+<!-- Toast stack -->
+<div id="toast-stack" class="fixed top-4 right-4 space-y-3" style="z-index:2147483002;"></div>
+
+{{ submission_data|default:"[]"|json_script:"submissionData" }}
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<!-- ✅ เปิด/ปิดแชทแบบไม่สร้างบับเบิลทักซ้ำ -->
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const win = document.getElementById('chatbot-window');
+  const btn = document.getElementById('chat-toggle-btn');
+  if (!win || !btn) return;
+
+  window.__chatInited = false;
+
+  function toggle() {
+    win.classList.toggle('hidden');
+    btn.classList.toggle('hidden');
+    if (!win.classList.contains('hidden') && !window.__chatInited) {
+      try { window.restoreChat && window.restoreChat(); } catch {}
+      window.__chatInited = true;
+    }
+  }
+  window.toggleChat = toggle;
+  btn.addEventListener('click', (e) => { e.preventDefault(); toggle(); });
+});
+</script>
+
+<!-- ---------- Chart + Realtime ---------- -->
+<script>
+function getCookie(name){
+  const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+  return m ? m.pop() : '';
+}
+
+(function setupChart(){
+  try{
+    const el = document.getElementById('submissionChart');
+    if (!el) return;
+
+    const submissionData = JSON.parse(document.getElementById('submissionData').textContent || '[]');
+    const ctx = el.getContext('2d');
+
+    document.getElementById('chart-skeleton')?.classList.add('hidden');
+    el.classList.remove('hidden');
+
+    if (typeof Chart === 'undefined') return;
+    const chart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: submissionData.map(x => x.title),
+        datasets: [{ label: '% ส่งงาน', data: submissionData.map(x => x.rate), backgroundColor: '#4f46e5' }]
+      },
+      options: {
+        responsive: true,
+        scales: { y: { beginAtZero: true, max: 100 } },
+        onClick: async (_evt, elements) => {
+          if (!elements.length) return;
+          const idx   = elements[0].index;
+          const title = chart.data.labels[idx];
+          const aid   = (submissionData[idx] && submissionData[idx].id) ? submissionData[idx].id : null;
+
+          try {
+            const qs  = aid ? `id=${aid}&course_id={{ course.id }}` :
+                               `title=${encodeURIComponent(title)}&course_id={{ course.id }}`;
+            const url = `{% url 'missing_submissions_api' %}?${qs}`;
+
+            const res  = await fetch(url, { headers: { 'X-Requested-With': 'fetch' } });
+            const data = await res.json();
+
+            const box  = document.getElementById('missingBox');
+            const list = document.getElementById('missingList');
+            const head = document.getElementById('missingTitle');
+
+            if (!data.ok) {
+              head.textContent = 'ไม่พบข้อมูล';
+              list.innerHTML = '';
+              box.classList.remove('hidden');
+              return;
+            }
+
+            head.textContent = `ยังไม่ส่งงาน: “${data.assignment}” (${data.count_not_submitted} คน)`;
+            list.innerHTML = data.not_submitted.length
+              ? data.not_submitted.map(n => `<li>${n}</li>`).join('')
+              : '<li>ทุกคนส่งครบแล้ว 🎉</li>';
+            box.classList.remove('hidden');
+          } catch {
+            alert('เกิดข้อผิดพลาดในการโหลดรายชื่อ');
+          }
+        }
+      }
+    });
+
+    // Realtime ผ่าน WS (ถ้ามี)
+    (function setupWS(){
+      try{
+        const scheme = (location.protocol === 'https:') ? 'wss' : 'ws';
+        const socket = new WebSocket(`${scheme}://${location.host}/ws/dashboard/`);
+        socket.onmessage = (e) => {
+          try {
+            const msg = JSON.parse(e.data || '{}');
+            const payload = msg.payload || msg;
+            if (!payload) return;
+
+            if (payload.submission_data) {
+              chart.data.labels = payload.submission_data.map(d => d.title);
+              chart.data.datasets[0].data = payload.submission_data.map(d => d.rate);
+              chart.update();
+            }
+            if (payload.class_stats) {
+              const avgRaw = (payload.class_stats.avg_pct ?? payload.class_stats.avg);
+              const mxRaw  = (payload.class_stats.max_pct ?? payload.class_stats.max);
+              const mnRaw  = (payload.class_stats.min_pct ?? payload.class_stats.min);
+              document.getElementById('stat-avg').textContent = (avgRaw==null)?'—':`${Number(avgRaw).toFixed(2)}%`;
+              document.getElementById('stat-max').textContent = (mxRaw==null)?'—':`${Number(mxRaw).toFixed(2)}%`;
+              document.getElementById('stat-min').textContent = (mnRaw==null)?'—':`${Number(mnRaw).toFixed(2)}%`;
+            }
+            if (payload.watchlist) renderWatchlist(payload.watchlist);
+          } catch {}
+        };
+      }catch{}
+    })();
+  }catch(e){}
+})();
+</script>
+
+<!-- ---------- Watchlist renderer ---------- -->
+<script>
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));}
+function colorByPct(p){ if(p>=70) return ['bg-emerald-500','text-emerald-600']; if(p>=50) return ['bg-amber-500','text-amber-600']; return ['bg-rose-500','text-rose-600']; }
+
+function renderWatchlist(list){
+  const wrap = document.querySelector('[data-widget="watchlist"] #watchlist');
+  if (!wrap) return;
+  if (!list || !list.length){
+    wrap.innerHTML = '<p class="text-slate-500">ยังไม่พบนักเรียนที่เข้าเกณฑ์ความเสี่ยง</p>';
+    return;
+  }
+  wrap.innerHTML = list.map(s=>{
+    const avg = (s.avg_pct==null)?null:Number(s.avg_pct);
+    const [barCls, txtCls] = avg==null?['bg-slate-300','text-slate-500']:colorByPct(avg);
+    return `
+      <div class="border rounded-xl p-3 hover:bg-slate-50 transition">
+        <div class="flex items-center justify-between gap-4">
+          <div class="min-w-0">
+            <div class="font-medium truncate">${escapeHtml(s.name)}</div>
+            <div class="mt-1 flex flex-wrap items-center gap-2 text-xs">
+              ${(s.missing>0)
+                ? `<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-rose-100 text-rose-700">⏰ พลาดส่ง ${s.missing}</span>`
+                : `<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">⏰ พลาดส่ง 0</span>`}
+              ${(s.low_streak>0)
+                ? `<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">📉 ต่ำติดกัน ${s.low_streak}</span>`
+                : `<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">📉 ต่ำติดกัน 0</span>`}
+            </div>
+          </div>
+          <div class="w-44">
+            ${avg==null
+              ? `<div class="text-right text-xs text-slate-400">ยังไม่มีคะแนน</div>`
+              : `
+                <div class="text-right text-xs text-slate-500 -mb-1">เฉลี่ย</div>
+                <div class="flex items-center gap-3">
+                  <div class="flex-1 h-2 rounded-full bg-slate-200 overflow-hidden">
+                    <div class="h-2 ${barCls}" style="width:${Math.max(0, Math.min(100, avg))}%"></div>
+                  </div>
+                  <div class="w-14 text-right font-semibold ${txtCls}">${avg.toFixed(0)}%</div>
+                </div>`}
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+}
+</script>
+
+<!-- ---------- Notifications (WebSocket) ---------- -->
+<script>
+(function setupNotifications(){
+  const stack = document.getElementById('toast-stack');
+  if (!stack) return;
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, m => (
+      {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]
+    ));
+  }
+  function showToast(text){
+    const el = document.createElement('div');
+    el.className = 'toast-item bg-white border border-slate-200 shadow-xl rounded-xl px-4 py-3 max-w-sm';
+    el.innerHTML = `
+      <div class="flex items-start gap-3">
+        <div class="w-8 h-8 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center">🔔</div>
+        <div class="flex-1">
+          <div class="text-sm">${escapeHtml(text)}</div>
+          <div class="text-[11px] text-slate-400 mt-1">ขณะนี้</div>
+        </div>
+        <button class="text-slate-400 hover:text-slate-600" onclick="this.closest('.toast-item')?.remove()">✕</button>
+      </div>`;
+    stack.appendChild(el);
+    setTimeout(()=> el.remove(), 9000);
+  }
+
+  try{
+    const scheme = (location.protocol === 'https:') ? 'wss' : 'ws';
+    const ws = new WebSocket(`${scheme}://${location.host}/ws/notifications/`);
+    ws.onmessage = (e) => {
+      try{
+        const data = JSON.parse(e.data || '{}');
+        const text = data.message || data.payload?.message || '';
+        if (text) showToast(text);
+      }catch{}
+    };
+    ws.onerror = ()=>console.debug('WS notify error');
+    ws.onclose  = ()=>console.debug('WS notify closed');
+  }catch(e){
+    console.debug('WS notify init failed', e);
+  }
+})();
+</script>
+
+<!-- ---------- Chat logic ---------- -->
+<script>
+(function setupChat(){
+  const UID = "{{ request.user.id|default:0 }}";
+  const CID = "{{ course.id|default:0 }}";
+  const KEY = `chat_history_internal_${UID}_${CID}`;
+
+  const form = document.getElementById("form-internal");
+  const input = document.getElementById("input-internal");
+  const chat  = document.getElementById("chat-internal");
+
+  function save(){ if(chat) localStorage.setItem(KEY, chat.innerHTML); }
+  function esc(s){ return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m])); }
+
+  window.restoreChat = function(){
+    if (!chat) return;
+    const saved = localStorage.getItem(KEY);
+    if (saved && saved.trim()) { chat.innerHTML = saved; return; }
+    if (chat.childElementCount) return;
+
+    const el = document.createElement("div");
+    el.className = "flex items-start gap-2";
+    el.innerHTML = `
+      <div class="w-7 h-7 rounded-full bg-indigo-500 flex items-center justify-center text-sm">🤖</div>
+      <div class="bg-[#3a3b3c] text-white rounded-2xl px-4 py-2 max-w-[75%] shadow space-y-2">
+        👋 สวัสดีคุณครู<br><br>คุณสามารถถามได้ เช่น:<br>
+        • รายชื่อนักเรียน<br>• ใครยังไม่ส่งงาน<br>• คะแนนรวมของนักเรียน<br>• คะแนนเฉลี่ยห้อง
+      </div>`;
+    chat.appendChild(el);
+    save();
+  };
+
+  function pushUser(t){
+    const el = document.createElement("div");
+    el.className = "flex justify-end";
+    el.innerHTML = `<div class="bg-indigo-600 text-white rounded-2xl px-4 py-2 max-w-[70%] shadow whitespace-pre-line">${esc(t)}</div>`;
+    chat.appendChild(el); chat.scrollTop = chat.scrollHeight; save();
+  }
+  function pushBot(html){
+    const el = document.createElement("div");
+    el.className = "flex items-start gap-2";
+    el.innerHTML = `<div class="w-7 h-7 rounded-full bg-indigo-500 flex items-center justify-center text-sm">🤖</div>
+      <div class="bg-[#3a3b3c] text-white rounded-2xl px-4 py-2 max-w-[75%] shadow space-y-2">${html}</div>`;
+    chat.appendChild(el); chat.scrollTop = chat.scrollHeight; save();
+  }
+
+  async function ask(text){
+    pushUser(text);
+    try{
+      const res = await fetch("{% url 'chatbot_api' %}", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRFToken": getCookie('csrftoken') },
+        body: JSON.stringify({ message: text, course_id: {{ course.id|default:0 }} })
+      });
+      const data = await res.json();
+      pushBot(data.reply || "⚠️ ไม่มีคำตอบ");
+    }catch(err){
+      pushBot("⚠️ เกิดข้อผิดพลาดในการเชื่อมต่อ");
+    }
+  }
+  window.quickAsk = (t)=>ask(t);
+
+  form?.addEventListener("submit", (e)=>{
+    e.preventDefault();
+    const text = (input?.value || "").trim();
+    if (text){ ask(text); input.value = ""; }
+  });
+})();
+</script>
+
+<style>
+.typing-dots::after{content:' .';animation:dots 1s steps(5,end) infinite}
+@keyframes dots{0%,20%{content:' .'}40%{content:' ..'}60%{content:' ...'}80%,100%{content:''}}
+.skeleton{background:linear-gradient(90deg,#f3f4f6 25%,#e5e7eb 37%,#f3f4f6 63%);background-size:400% 100%;animation:skeleton 1.4s ease infinite}
+@keyframes skeleton{0%{background-position:100% 50%}100%{background-position:0 50%}}
+</style>
+{% endblock %}
